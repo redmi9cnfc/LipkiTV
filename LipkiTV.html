@@ -13,7 +13,7 @@
     body{
       margin:0; font-family:Inter,Arial;
       background:var(--bg); color:var(--text);
-      height:100vh; overflow:hidden; /* оставляем */
+      height:100vh; overflow:hidden;
     }
 
     /* ===== ОСНОВНАЯ СЕТКА ===== */
@@ -25,7 +25,7 @@
       padding:10px;
     }
 
-    /* ========== МОБИЛЬНАЯ ВЕРСИЯ ========== */
+    /* ===== МОБИЛЬНАЯ ВЕРСИЯ ===== */
     @media(max-width:800px){
       .app{ grid-template-columns:1fr; }
 
@@ -34,12 +34,15 @@
         top:0; left:-260px;
         width:260px; height:100vh;
         transition:.3s;
-        z-index:20;
+        z-index:100;
         box-shadow:0 0 20px #0008;
       }
       .sidebar.open{ left:0; }
 
       #menuBtn{ display:block; }
+      .main{
+        position:relative;
+      }
     }
 
     #menuBtn{
@@ -48,7 +51,8 @@
       top:10px; left:10px;
       padding:6px 10px;
       font-size:20px;
-      z-index:25;
+      z-index:110;
+      cursor:pointer;
     }
 
     /* ===== САЙДБАР ===== */
@@ -57,6 +61,9 @@
       padding:12px;
       border-radius:10px;
       overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
     }
 
     /* ===== MAIN ===== */
@@ -64,7 +71,7 @@
       display:flex;
       flex-direction:column;
       gap:10px;
-      overflow:hidden;           /* чтобы внутренние элементы не ломали высоту */
+      overflow:hidden;
     }
 
     /* ===== VIDEO ===== */
@@ -83,7 +90,7 @@
     /* ===== КАНАЛЫ ===== */
     .channels-holder{
       flex:1;
-      overflow-y:auto;            /* ГЛАВНОЕ — ЛИСТАЕТСЯ */
+      overflow-y:auto;
       padding-right:5px;
     }
 
@@ -121,12 +128,16 @@
 
     .muted{ color:var(--muted); font-size:12px; }
 
-    button,input{
+    button,input,a{
       background:transparent;
       color:var(--text);
       border:1px solid #444;
       padding:6px;
       border-radius:6px;
+      cursor:pointer;
+      text-decoration:none;
+      text-align:center;
+      display:inline-block;
     }
 
     /* ===== ЛИСТАТЕЛ ===== */
@@ -136,6 +147,20 @@
       justify-content:space-between;
     }
 
+    /* ===== TELEGRAM BUTTON ===== */
+    .tg-button{
+      margin-top:auto; /* прижимает к низу сайдбара */
+      width:100%;
+      background-color:var(--accent);
+      color:#fff;
+      border:none;
+      text-align:center;
+      padding:8px;
+      border-radius:8px;
+    }
+    .tg-button:hover{
+      opacity:0.85;
+    }
   </style>
 </head>
 
@@ -147,7 +172,9 @@
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
-    <div style="font-size:20px;font-weight:700;margin-bottom:10px">LipkiTV</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:10px">
+      LipkiTV <span style="font-size:12px; font-weight:400; color:var(--muted)">v.0.1.0</span>
+    </div>
 
     <button id="settingsToggle" style="width:100%;margin-bottom:10px">⚙ Настройки</button>
 
@@ -159,6 +186,8 @@
 
     <h3 class="muted">Группы</h3>
     <div id="groupsList" style="display:flex;flex-direction:column;gap:4px"></div>
+
+    <a href="https://t.me/GukoviptvLipkitv" target="_blank" class="tg-button">Группа в Телеграме</a>
   </aside>
 
   <!-- MAIN -->
@@ -217,8 +246,19 @@
   let currentList = [];
   let currentIndex = -1;
 
+  // ===== MENU TOGGLE =====
   menuBtn.onclick = () => sidebar.classList.toggle("open");
 
+  // Закрытие сайдбара при клике вне
+  document.addEventListener("click", (e) => {
+    if (window.innerWidth <= 800) {
+      if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+        sidebar.classList.remove("open");
+      }
+    }
+  });
+
+  // ===== SETTINGS =====
   settingsToggle.onclick = () =>
     settingsPanel.style.display =
       settingsPanel.style.display === "none" ? "block" : "none";
@@ -353,7 +393,6 @@
     }
   }
 
-  /* ЛИСТАТЕЛ КАНАЛОВ */
   prevBtn.onclick = () => {
     if (currentIndex > 0)
       playChannel(currentList[currentIndex - 1], currentIndex - 1);

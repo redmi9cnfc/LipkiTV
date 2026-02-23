@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LipkiTV</title>
+<title>LipkiTV - Умный плеер</title>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="https://cdn.jsdelivr.net/npm/mux.js@6.0.0/dist/mux.min.js"></script>
 
 <style>
 :root{
@@ -123,6 +124,7 @@ video{
   height:38px;
   object-fit:contain;
   border-radius:6px;
+  background:#0b1220;
 }
 
 @media(min-width:1600px){
@@ -131,6 +133,14 @@ video{
     padding:16px;
   }
 }
+
+.connection-status {
+  font-size:12px;
+  text-align:center;
+  padding:4px;
+  border-radius:4px;
+  background:rgba(0,0,0,0.3);
+}
 </style>
 </head>
 
@@ -138,7 +148,10 @@ video{
 
 <div class="app">
 
-  <div class="logo">LipkiTV</div>
+  <div class="logo">
+    LipkiTV
+    <span style="font-size:12px; background:#7c3aed; padding:2px 6px; border-radius:10px;">beta</span>
+  </div>
 
   <div class="video-wrap">
     <video id="video" controls playsinline></video>
@@ -157,8 +170,7 @@ video{
 </div>
 
 <script>
-const PLAYLIST_URL =
-"https://raw.githubusercontent.com/LinTV-OFFICAL/LinTV/refs/heads/main/LinIPTV.m3u";
+const PLAYLIST_URL = "https://raw.githubusercontent.com/redmi9cnfc/LipkiTV/main/test.m3u";
 
 const video = document.getElementById("video");
 const groupsEl = document.getElementById("groups");
@@ -169,14 +181,26 @@ const nowEl = document.getElementById("now");
 let channels = [];
 let currentGroup = null;
 let hls = null;
+let currentRetryCount = 0;
+const MAX_RETRIES = 3;
+
+// Разные User-Agent для разных каналов
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+];
 
 async function loadPlaylist(){
   try{
     const response = await fetch(PLAYLIST_URL);
     const text = await response.text();
     parseM3U(text);
+    nowEl.textContent = "Выберите канал";
   }catch(e){
     nowEl.textContent = "Ошибка загрузки плейлиста";
+    console.error(e);
   }
 }
 
@@ -184,12 +208,21 @@ function parseM3U(text){
   channels = [];
   const lines = text.split("\n");
   let meta = null;
+  let userAgent = null;
 
-  for(let line of lines){
-    line = line.trim();
+  for(let i = 0; i < lines.length; i++){
+    let line = lines[i].trim();
 
     if(line.startsWith("#EXTINF")){
       meta = line;
+      
+      const uaMatch = line.match(/ttp-user-agent="([^"]+)"/i);
+      if(uaMatch) userAgent = uaMatch[1];
+    }
+    else if(line.startsWith("#EXTVLCOPT:")) {
+      if(line.includes("http-user-agent=")) {
+        userAgent = line.split("=").slice(1).join("=");
+      }
     }
     else if(line && !line.startsWith("#")){
       let name = line;
@@ -207,8 +240,17 @@ function parseM3U(text){
         if(l) logo = l[1];
       }
 
-      channels.push({name, url:line, group, logo});
+      channels.push({
+        name, 
+        url: line, 
+        group, 
+        logo,
+        userAgent: userAgent || USER_AGENTS[0],
+        baseUrl: line.split('/').slice(0, -1).join('/') // Базовый URL для относительных путей
+      });
+      
       meta=null;
+      userAgent=null;
     }
   }
 
@@ -248,34 +290,145 @@ function renderChannels(){
       const el=document.createElement("div");
       el.className="channel";
       el.innerHTML = `
-        ${c.logo ? `<img src="${c.logo}">` : ""}
+        ${c.logo ? `<img src="${c.logo}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'38\\' height=\\'38\\' viewBox=\\'0 0 24 24\\' fill=\\'%236366f1\\'%3E%3Cpath d=\\'M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM8 15v-4l4 2-4 2z\\'/%3E%3C/svg%3E';">` : ""}
         <div>${c.name}</div>
       `;
-      el.onclick=()=>play(c);
+      el.onclick=()=>playWithRetry(c);
       channelsEl.appendChild(el);
     });
 }
 
 searchInput.oninput = renderChannels;
 
-function play(channel){
-  if(hls) hls.destroy();
-  nowEl.textContent = channel.name;
+function playWithRetry(channel, retryCount = 0) {
+  if (retryCount >= MAX_RETRIES) {
+    nowEl.textContent = `❌ ${channel.name} - не удалось загрузить`;
+    return;
+  }
 
-  if(Hls.isSupported() && channel.url.includes(".m3u8")){
-    hls = new Hls({
+  if (retryCount > 0) {
+    nowEl.textContent = `🔄 Попытка ${retryCount + 1}/${MAX_RETRIES}: ${channel.name}`;
+  }
+
+  // Меняем User-Agent при каждой попытке
+  const userAgent = retryCount < USER_AGENTS.length ? 
+    USER_AGENTS[retryCount] : 
+    USER_AGENTS[0];
+
+  play(channel, userAgent, retryCount);
+}
+
+function play(channel, userAgent, retryCount) {
+  if(hls) {
+    hls.destroy();
+    hls = null;
+  }
+  
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+
+  console.log(`Playing ${channel.name} with UA: ${userAgent}`);
+
+  // Пробуем разные варианты URL
+  const urlsToTry = [
+    channel.url,
+    // Пробуем без query параметров
+    channel.url.split('?')[0],
+    // Пробуем с http вместо https
+    channel.url.replace('https://', 'http://'),
+    // Пробуем добавить случайный параметр для избежания кэша
+    channel.url + (channel.url.includes('?') ? '&' : '?') + '_t=' + Date.now()
+  ];
+
+  tryPlayUrl(channel, urlsToTry, userAgent, retryCount, 0);
+}
+
+function tryPlayUrl(channel, urls, userAgent, retryCount, urlIndex) {
+  if (urlIndex >= urls.length) {
+    // Все URL перепробовали
+    playWithRetry(channel, retryCount + 1);
+    return;
+  }
+
+  const currentUrl = urls[urlIndex];
+  console.log(`Trying URL ${urlIndex + 1}/${urls.length}:`, currentUrl);
+
+  // Для m3u8 потоков используем HLS.js
+  if (Hls.isSupported() && currentUrl.includes('.m3u8')) {
+    const config = {
       maxBufferLength: 30,
-      enableWorker: true
-    });
-    hls.loadSource(channel.url);
+      maxMaxBufferLength: 60,
+      enableWorker: true,
+      liveSyncDurationCount: 3,
+      fragLoadingTimeOut: 20000,
+      manifestLoadingTimeOut: 20000,
+      levelLoadingTimeOut: 20000,
+      xhrSetup: (xhr, url) => {
+        xhr.setRequestHeader('User-Agent', userAgent);
+        xhr.setRequestHeader('Referer', 'https://www.google.com/');
+        xhr.setRequestHeader('Origin', 'https://www.google.com');
+        xhr.withCredentials = false;
+      }
+    };
+    
+    hls = new Hls(config);
+    
+    hls.loadSource(currentUrl);
     hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play());
+    
+    let timeout = setTimeout(() => {
+      // Таймаут загрузки
+      if (hls) {
+        hls.destroy();
+        hls = null;
+        tryPlayUrl(channel, urls, userAgent, retryCount, urlIndex + 1);
+      }
+    }, 15000);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      clearTimeout(timeout);
+      nowEl.textContent = `▶ ${channel.name}`;
+      video.play()
+        .catch(e => console.log('Auto-play prevented:', e));
+    });
+
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        console.error('HLS fatal error:', data);
+        clearTimeout(timeout);
+        hls.destroy();
+        hls = null;
+        tryPlayUrl(channel, urls, userAgent, retryCount, urlIndex + 1);
+      }
+    });
+
   } else {
-    video.src = channel.url;
-    video.play();
+    // Прямое видео
+    video.src = currentUrl;
+    
+    let timeout = setTimeout(() => {
+      video.removeAttribute('src');
+      video.load();
+      tryPlayUrl(channel, urls, userAgent, retryCount, urlIndex + 1);
+    }, 10000);
+
+    video.onloadeddata = () => {
+      clearTimeout(timeout);
+      nowEl.textContent = `▶ ${channel.name}`;
+      video.play().catch(e => console.log('Auto-play prevented:', e));
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      video.removeAttribute('src');
+      video.load();
+      tryPlayUrl(channel, urls, userAgent, retryCount, urlIndex + 1);
+    };
   }
 }
 
+// Загружаем плейлист
 loadPlaylist();
 </script>
 

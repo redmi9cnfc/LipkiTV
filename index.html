@@ -9,34 +9,56 @@
 
 <style>
 :root{
-  --bg:#0b0f1a;
-  --card:#121826;
+  --bg:#0f172a;
+  --card:#1e293b;
   --accent:#6366f1;
-  --text:#e5e7eb;
-  --muted:#9ca3af;
+  --accent2:#7c3aed;
+  --text:#f1f5f9;
+  --muted:#94a3b8;
 }
 
 body{
   margin:0;
   background:var(--bg);
   color:var(--text);
-  font-family:system-ui, Arial;
+  font-family:system-ui,-apple-system,Arial;
   height:100vh;
   display:flex;
-  flex-direction:column;
 }
-
-/* ===== Layout ===== */
 
 .app{
   display:flex;
   flex-direction:column;
-  height:100vh;
+  width:100%;
   padding:12px;
   gap:12px;
 }
 
-/* ===== Groups ===== */
+.logo{
+  text-align:center;
+  font-size:26px;
+  font-weight:bold;
+  color:var(--accent);
+}
+
+.video-wrap{
+  background:black;
+  border-radius:16px;
+  overflow:hidden;
+  aspect-ratio:16/9;
+  box-shadow:0 10px 25px rgba(0,0,0,0.5);
+}
+
+video{
+  width:100%;
+  height:100%;
+}
+
+#now{
+  text-align:center;
+  color:var(--muted);
+  font-size:14px;
+}
 
 .groups{
   display:flex;
@@ -45,47 +67,30 @@ body{
   scrollbar-width:none;
 }
 
-.groups::-webkit-scrollbar{
-  display:none;
-}
+.groups::-webkit-scrollbar{ display:none; }
 
 .group{
-  flex:0 0 auto;
   padding:8px 14px;
   border-radius:20px;
   background:var(--card);
   cursor:pointer;
   white-space:nowrap;
   font-size:14px;
-  transition:.2s;
+  transition:0.2s;
 }
 
 .group.active{
   background:var(--accent);
 }
 
-/* ===== Player ===== */
-
-.video-wrap{
-  background:black;
-  border-radius:14px;
-  overflow:hidden;
-  aspect-ratio:16/9;
-}
-
-video{
-  width:100%;
-  height:100%;
-}
-
-/* ===== Info ===== */
-
-#now{
+#search{
+  padding:10px;
+  border-radius:8px;
+  border:none;
+  background:#0b1220;
+  color:white;
   font-size:14px;
-  color:var(--muted);
 }
-
-/* ===== Channels ===== */
 
 .channels-holder{
   flex:1;
@@ -94,7 +99,7 @@ video{
 
 .channels{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
   gap:10px;
 }
 
@@ -102,29 +107,28 @@ video{
   background:var(--card);
   padding:10px;
   border-radius:12px;
-  cursor:pointer;
   display:flex;
   align-items:center;
   gap:8px;
-  transition:.2s;
+  cursor:pointer;
+  transition:0.2s;
 }
 
 .channel:hover{
-  background:var(--accent);
+  background:var(--accent2);
 }
 
 .channel img{
-  width:40px;
-  height:40px;
+  width:38px;
+  height:38px;
   object-fit:contain;
+  border-radius:6px;
 }
-
-/* ===== TV mode ===== */
 
 @media(min-width:1600px){
   .channel{
-    padding:18px;
     font-size:18px;
+    padding:16px;
   }
 }
 </style>
@@ -134,15 +138,17 @@ video{
 
 <div class="app">
 
-  <div class="groups" id="groups"></div>
+  <div class="logo">LipkiTV</div>
 
   <div class="video-wrap">
     <video id="video" controls playsinline></video>
   </div>
 
-  <div id="now">—</div>
+  <div id="now">Выберите канал</div>
 
-  <input id="search" placeholder="Поиск..." style="padding:8px;border-radius:8px;border:none;background:#1e293b;color:white">
+  <div class="groups" id="groups"></div>
+
+  <input id="search" placeholder="Поиск канала..." type="text">
 
   <div class="channels-holder">
     <div id="channels" class="channels"></div>
@@ -151,8 +157,8 @@ video{
 </div>
 
 <script>
-const BUILTIN_URL =
-"https://raw.githubusercontent.com/mopidplus-max/LiTV/refs/heads/main/liTV.m3u";
+const PLAYLIST_URL =
+"https://raw.githubusercontent.com/LinTV-OFFICAL/LinTV/refs/heads/main/LinIPTV.m3u";
 
 const video = document.getElementById("video");
 const groupsEl = document.getElementById("groups");
@@ -164,130 +170,109 @@ let channels = [];
 let currentGroup = null;
 let hls = null;
 
-/* ===== LOAD ===== */
-
 async function loadPlaylist(){
   try{
-    const r = await fetch(BUILTIN_URL);
-    const text = await r.text();
+    const response = await fetch(PLAYLIST_URL);
+    const text = await response.text();
     parseM3U(text);
   }catch(e){
     nowEl.textContent = "Ошибка загрузки плейлиста";
   }
 }
 
-/* ===== PARSER ===== */
-
 function parseM3U(text){
   channels = [];
-  let lines = text.split("\n");
-  let metaLine = null;
+  const lines = text.split("\n");
+  let meta = null;
 
   for(let line of lines){
     line = line.trim();
 
     if(line.startsWith("#EXTINF")){
-      metaLine = line;
+      meta = line;
     }
     else if(line && !line.startsWith("#")){
       let name = line;
-      let group = "Other";
+      let group = "Другие";
       let logo = "";
 
-      if(metaLine){
+      if(meta){
+        const parts = meta.split(",");
+        if(parts.length>1) name = parts.pop().trim();
 
-        const parts = metaLine.split(",");
-        if(parts.length > 1)
-          name = parts[parts.length - 1].trim();
+        const g = meta.match(/group-title="([^"]+)"/i);
+        if(g) group = g[1];
 
-        const groupMatch = metaLine.match(/group-title="([^"]+)"/i);
-        if(groupMatch) group = groupMatch[1];
-
-        const logoMatch = metaLine.match(/tvg-logo="([^"]+)"/i);
-        if(logoMatch) logo = logoMatch[1];
+        const l = meta.match(/tvg-logo="([^"]+)"/i);
+        if(l) logo = l[1];
       }
 
-      channels.push({
-        name: name || "Unknown",
-        url: line,
-        group,
-        logo
-      });
-
-      metaLine = null;
+      channels.push({name, url:line, group, logo});
+      meta=null;
     }
   }
 
   renderGroups();
 }
 
-/* ===== GROUPS ===== */
-
 function renderGroups(){
   const groups = [...new Set(channels.map(c=>c.group))];
-
   groupsEl.innerHTML="";
+
   groups.forEach(g=>{
-    const div=document.createElement("div");
-    div.className="group";
-    div.textContent=g;
-    div.onclick=()=>selectGroup(g);
-    groupsEl.appendChild(div);
+    const el=document.createElement("div");
+    el.className="group";
+    el.textContent=g;
+    el.onclick=()=>selectGroup(g);
+    groupsEl.appendChild(el);
   });
 
-  selectGroup(groups[0]);
+  if(groups.length>0) selectGroup(groups[0]);
 }
 
 function selectGroup(g){
   currentGroup=g;
-  [...groupsEl.children].forEach(el=>
-    el.classList.toggle("active",el.textContent===g)
-  );
+  [...groupsEl.children].forEach(el=>{
+    el.classList.toggle("active",el.textContent===g);
+  });
   renderChannels();
 }
-
-/* ===== CHANNELS ===== */
 
 function renderChannels(){
   const q = searchInput.value.toLowerCase();
   channelsEl.innerHTML="";
 
   channels
-    .filter(c=>c.group===currentGroup &&
-      c.name.toLowerCase().includes(q))
+    .filter(c=>c.group===currentGroup && c.name.toLowerCase().includes(q))
     .forEach(c=>{
-      const div=document.createElement("div");
-      div.className="channel";
-
-      div.innerHTML = `
+      const el=document.createElement("div");
+      el.className="channel";
+      el.innerHTML = `
         ${c.logo ? `<img src="${c.logo}">` : ""}
         <div>${c.name}</div>
       `;
-
-      div.onclick=()=>play(c);
-
-      channelsEl.appendChild(div);
+      el.onclick=()=>play(c);
+      channelsEl.appendChild(el);
     });
 }
 
-searchInput.oninput=renderChannels;
+searchInput.oninput = renderChannels;
 
-/* ===== PLAYER ===== */
-
-function play(ch){
+function play(channel){
   if(hls) hls.destroy();
-  nowEl.textContent = ch.name;
+  nowEl.textContent = channel.name;
 
-  if(Hls.isSupported() && ch.url.includes(".m3u8")){
+  if(Hls.isSupported() && channel.url.includes(".m3u8")){
     hls = new Hls({
-      maxBufferLength: 20,
-      maxMaxBufferLength: 30,
+      maxBufferLength: 30,
       enableWorker: true
     });
-    hls.loadSource(ch.url);
+    hls.loadSource(channel.url);
     hls.attachMedia(video);
-  }else{
-    video.src = ch.url;
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>video.play());
+  } else {
+    video.src = channel.url;
+    video.play();
   }
 }
 

@@ -1,368 +1,297 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>LipkiTV — IPTV Player</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LipkiTV</title>
 
-  <style>
-    :root{
-      --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2;
-      --accent:#4f46e5; --text:#e6eef8; --glass:rgba(255,255,255,0.03);
-    }
-    body{
-      margin:0; font-family:Inter,Arial;
-      background:var(--bg); color:var(--text);
-      height:100vh; overflow:hidden; /* оставляем */
-    }
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 
-    /* ===== ОСНОВНАЯ СЕТКА ===== */
-    .app{
-      display:grid;
-      grid-template-columns:260px 1fr;
-      height:100vh;
-      gap:10px;
-      padding:10px;
-    }
+<style>
+:root{
+  --bg:#0b0f1a;
+  --card:#121826;
+  --accent:#6366f1;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+}
 
-    /* ========== МОБИЛЬНАЯ ВЕРСИЯ ========== */
-    @media(max-width:800px){
-      .app{ grid-template-columns:1fr; }
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui, Arial;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+}
 
-      .sidebar{
-        position:fixed;
-        top:0; left:-260px;
-        width:260px; height:100vh;
-        transition:.3s;
-        z-index:20;
-        box-shadow:0 0 20px #0008;
-      }
-      .sidebar.open{ left:0; }
+/* ===== Layout ===== */
 
-      #menuBtn{ display:block; }
-    }
+.app{
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  padding:12px;
+  gap:12px;
+}
 
-    #menuBtn{
-      display:none;
-      position:absolute;
-      top:10px; left:10px;
-      padding:6px 10px;
-      font-size:20px;
-      z-index:25;
-    }
+/* ===== Groups ===== */
 
-    /* ===== САЙДБАР ===== */
-    .sidebar{
-      background:var(--card);
-      padding:12px;
-      border-radius:10px;
-      overflow-y:auto;
-    }
+.groups{
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
 
-    /* ===== MAIN ===== */
-    .main{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      overflow:hidden;           /* чтобы внутренние элементы не ломали высоту */
-    }
+.groups::-webkit-scrollbar{
+  display:none;
+}
 
-    /* ===== VIDEO ===== */
-    .video-wrap{
-      background:#000;
-      border-radius:8px;
-      position:relative;
-      padding-top:56.25%;
-    }
-    video{
-      position:absolute;
-      top:0; left:0;
-      width:100%; height:100%;
-    }
+.group{
+  flex:0 0 auto;
+  padding:8px 14px;
+  border-radius:20px;
+  background:var(--card);
+  cursor:pointer;
+  white-space:nowrap;
+  font-size:14px;
+  transition:.2s;
+}
 
-    /* ===== КАНАЛЫ ===== */
-    .channels-holder{
-      flex:1;
-      overflow-y:auto;            /* ГЛАВНОЕ — ЛИСТАЕТСЯ */
-      padding-right:5px;
-    }
+.group.active{
+  background:var(--accent);
+}
 
-    .channels{
-      display:grid;
-      grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-      gap:8px;
-    }
+/* ===== Player ===== */
 
-    @media(max-width:800px){
-      .channels{
-        grid-template-columns:repeat(2,1fr);
-      }
-    }
+.video-wrap{
+  background:black;
+  border-radius:14px;
+  overflow:hidden;
+  aspect-ratio:16/9;
+}
 
-    .channel{
-      background:var(--card);
-      padding:8px;
-      border-radius:8px;
-      cursor:pointer;
-      display:flex; gap:8px;
-      align-items:center;
-      transition:.2s;
-    }
-    .channel:hover{
-      background:var(--glass);
-    }
+video{
+  width:100%;
+  height:100%;
+}
 
-    .group{
-      padding:6px; border-radius:8px; cursor:pointer;
-    }
-    .group.active{
-      background:var(--glass);
-    }
+/* ===== Info ===== */
 
-    .muted{ color:var(--muted); font-size:12px; }
+#now{
+  font-size:14px;
+  color:var(--muted);
+}
 
-    button,input{
-      background:transparent;
-      color:var(--text);
-      border:1px solid #444;
-      padding:6px;
-      border-radius:6px;
-    }
+/* ===== Channels ===== */
 
-    /* ===== ЛИСТАТЕЛ ===== */
-    .nav-ch{
-      margin-top:10px;
-      display:flex;
-      justify-content:space-between;
-    }
+.channels-holder{
+  flex:1;
+  overflow-y:auto;
+}
 
-  </style>
+.channels{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:10px;
+}
+
+.channel{
+  background:var(--card);
+  padding:10px;
+  border-radius:12px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  transition:.2s;
+}
+
+.channel:hover{
+  background:var(--accent);
+}
+
+.channel img{
+  width:40px;
+  height:40px;
+  object-fit:contain;
+}
+
+/* ===== TV mode ===== */
+
+@media(min-width:1600px){
+  .channel{
+    padding:18px;
+    font-size:18px;
+  }
+}
+</style>
 </head>
 
 <body>
 
-<button id="menuBtn">☰</button>
-
 <div class="app">
 
-  <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
-    <div style="font-size:20px;font-weight:700;margin-bottom:10px">LipkiTV</div>
+  <div class="groups" id="groups"></div>
 
-    <button id="settingsToggle" style="width:100%;margin-bottom:10px">⚙ Настройки</button>
+  <div class="video-wrap">
+    <video id="video" controls playsinline></video>
+  </div>
 
-    <div id="settingsPanel" style="display:none">
-      <label class="muted">Показывать логотипы <input id="showLogo" type="checkbox" checked></label><br><br>
-      <label class="muted">Автоплей <input id="autoplay" type="checkbox"></label><br><br>
-      <label class="muted">Буфер (сек): <input id="bufferInput" type="number" value="10" min="1" max="60" style="width:70px"></label><br><br>
-    </div>
+  <div id="now">—</div>
 
-    <h3 class="muted">Группы</h3>
-    <div id="groupsList" style="display:flex;flex-direction:column;gap:4px"></div>
-  </aside>
+  <input id="search" placeholder="Поиск..." style="padding:8px;border-radius:8px;border:none;background:#1e293b;color:white">
 
-  <!-- MAIN -->
-  <main class="main">
+  <div class="channels-holder">
+    <div id="channels" class="channels"></div>
+  </div>
 
-    <div>
-      <div class="video-wrap">
-        <video id="video" controls playsinline></video>
-      </div>
-
-      <div class="muted" id="nowPlaying" style="margin-top:6px">—</div>
-
-      <div class="nav-ch">
-        <button id="prevBtn">⟸ Предыдущий</button>
-        <button id="nextBtn">Следующий ⟹</button>
-      </div>
-    </div>
-
-    <!-- ЛИСТАЕМЫЙ БЛОК КАНАЛОВ -->
-    <div class="channels-holder">
-      <h3 style="margin:0 0 8px 0">Каналы</h3>
-      <input id="filter" placeholder="Поиск..." style="width:100%;margin-bottom:8px">
-      <div id="channelsGrid" class="channels"></div>
-    </div>
-
-  </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
-
 <script>
-  const BUILTIN_URL =
-    "https://dl.dropboxusercontent.com/scl/fi/j9kbbrl5c0vi0ehapepuw/LIPKITV-GRUPS.m3u8?rlkey=u9bwaasqdl57x5ufvxb63w2qm&st=0d2qxf5o";
+const BUILTIN_URL =
+"https://raw.githubusercontent.com/mopidplus-max/LiTV/refs/heads/main/liTV.m3u";
 
-  const groupsList = document.getElementById("groupsList");
-  const channelsGrid = document.getElementById("channelsGrid");
-  const video = document.getElementById("video");
-  const nowPlaying = document.getElementById("nowPlaying");
-  const filterInput = document.getElementById("filter");
-  const showLogo = document.getElementById("showLogo");
-  const autoplay = document.getElementById("autoplay");
-  const bufferInput = document.getElementById("bufferInput");
-  const settingsToggle = document.getElementById("settingsToggle");
-  const settingsPanel = document.getElementById("settingsPanel");
-  const prevBtn = document.getElementById("prevBtn");
-  const nextBtn = document.getElementById("nextBtn");
-  const menuBtn = document.getElementById("menuBtn");
-  const sidebar = document.getElementById("sidebar");
+const video = document.getElementById("video");
+const groupsEl = document.getElementById("groups");
+const channelsEl = document.getElementById("channels");
+const searchInput = document.getElementById("search");
+const nowEl = document.getElementById("now");
 
-  let channels = [];
-  let groups = [];
-  let currentGroup = null;
-  let playlistText = "";
-  let hls = null;
+let channels = [];
+let currentGroup = null;
+let hls = null;
 
-  let currentList = [];
-  let currentIndex = -1;
+/* ===== LOAD ===== */
 
-  menuBtn.onclick = () => sidebar.classList.toggle("open");
+async function loadPlaylist(){
+  try{
+    const r = await fetch(BUILTIN_URL);
+    const text = await r.text();
+    parseM3U(text);
+  }catch(e){
+    nowEl.textContent = "Ошибка загрузки плейлиста";
+  }
+}
 
-  settingsToggle.onclick = () =>
-    settingsPanel.style.display =
-      settingsPanel.style.display === "none" ? "block" : "none";
+/* ===== PARSER ===== */
 
-  filterInput.oninput = () => renderChannels(currentGroup);
+function parseM3U(text){
+  channels = [];
+  let lines = text.split("\n");
+  let metaLine = null;
 
-  loadBuiltin();
+  for(let line of lines){
+    line = line.trim();
 
-  async function loadBuiltin() {
-    try {
-      const r = await fetch(BUILTIN_URL);
-      playlistText = await r.text();
-      parseAndRender(playlistText);
-    } catch (e) {
-      groupsList.innerHTML = "<div class='muted'>Ошибка загрузки плейлиста</div>";
+    if(line.startsWith("#EXTINF")){
+      metaLine = line;
     }
-  }
+    else if(line && !line.startsWith("#")){
+      let name = line;
+      let group = "Other";
+      let logo = "";
 
-  function parseAndRender(text) {
-    channels = parseM3U(text);
-    groups = [...new Set(channels.map(c => c.group))];
+      if(metaLine){
 
-    groupsList.innerHTML = "";
-    groups.forEach(g => {
-      let div = document.createElement("div");
-      div.className = "group";
-      div.textContent = g;
-      div.onclick = () => selectGroup(g);
-      groupsList.appendChild(div);
-    });
+        const parts = metaLine.split(",");
+        if(parts.length > 1)
+          name = parts[parts.length - 1].trim();
 
-    selectGroup(groups[0]);
-  }
+        const groupMatch = metaLine.match(/group-title="([^"]+)"/i);
+        if(groupMatch) group = groupMatch[1];
 
-  function parseM3U(text) {
-    let out = [];
-    let last = null;
-
-    for (let line of text.split(/\n/)) {
-      line = line.trim();
-
-      if (line.startsWith("#EXTINF")) last = line;
-      else if (line && !line.startsWith("#")) {
-        let meta = {
-          title: line,
-          url: line,
-          group: "Other",
-          logo: ""
-        };
-
-        if (last) {
-          const name = last.split(",")[1];
-          meta.title = name || line;
-
-          const grp = last.match(/group-title="([^"]+)"/i);
-          if (grp) meta.group = grp[1];
-
-          const logo = last.match(/tvg-logo="([^"]+)"/i);
-          if (logo) meta.logo = logo[1];
-        }
-        out.push(meta);
-        last = null;
-      }
-    }
-    return out;
-  }
-
-  function selectGroup(g) {
-    currentGroup = g;
-    [...groupsList.children].forEach(el =>
-      el.classList.toggle("active", el.textContent === g)
-    );
-    renderChannels(g);
-  }
-
-  function renderChannels(group) {
-    const q = filterInput.value.toLowerCase();
-
-    currentList = channels.filter(
-      c =>
-        c.group === group &&
-        (c.title.toLowerCase().includes(q) || c.url.toLowerCase().includes(q))
-    );
-
-    channelsGrid.innerHTML = "";
-
-    currentList.forEach((ch, i) => {
-      const el = document.createElement("div");
-      el.className = "channel";
-      el.onclick = () => playChannel(ch, i);
-
-      if (showLogo.checked && ch.logo) {
-        const img = document.createElement("img");
-        img.src = ch.logo;
-        img.width = 50;
-        el.appendChild(img);
+        const logoMatch = metaLine.match(/tvg-logo="([^"]+)"/i);
+        if(logoMatch) logo = logoMatch[1];
       }
 
-      const m = document.createElement("div");
-      m.innerHTML = "<div style='font-weight:600'>" + ch.title + "</div>";
-      el.appendChild(m);
-
-      channelsGrid.appendChild(el);
-    });
-  }
-
-  function stopPlayback() {
-    if (hls) hls.destroy();
-    hls = null;
-    video.src = "";
-    nowPlaying.textContent = "—";
-  }
-
-  function playChannel(ch, index) {
-    stopPlayback();
-
-    nowPlaying.textContent = ch.title;
-    currentIndex = index;
-
-    if (Hls.isSupported() && ch.url.includes(".m3u8")) {
-      hls = new Hls({
-        maxBufferLength: Number(bufferInput.value) || 10
+      channels.push({
+        name: name || "Unknown",
+        url: line,
+        group,
+        logo
       });
-      hls.loadSource(ch.url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (autoplay.checked) video.play();
-      });
-    } else {
-      video.src = ch.url;
-      if (autoplay.checked) video.play();
+
+      metaLine = null;
     }
   }
 
-  /* ЛИСТАТЕЛ КАНАЛОВ */
-  prevBtn.onclick = () => {
-    if (currentIndex > 0)
-      playChannel(currentList[currentIndex - 1], currentIndex - 1);
-  };
+  renderGroups();
+}
 
-  nextBtn.onclick = () => {
-    if (currentIndex < currentList.length - 1)
-      playChannel(currentList[currentIndex + 1], currentIndex + 1);
-  };
+/* ===== GROUPS ===== */
+
+function renderGroups(){
+  const groups = [...new Set(channels.map(c=>c.group))];
+
+  groupsEl.innerHTML="";
+  groups.forEach(g=>{
+    const div=document.createElement("div");
+    div.className="group";
+    div.textContent=g;
+    div.onclick=()=>selectGroup(g);
+    groupsEl.appendChild(div);
+  });
+
+  selectGroup(groups[0]);
+}
+
+function selectGroup(g){
+  currentGroup=g;
+  [...groupsEl.children].forEach(el=>
+    el.classList.toggle("active",el.textContent===g)
+  );
+  renderChannels();
+}
+
+/* ===== CHANNELS ===== */
+
+function renderChannels(){
+  const q = searchInput.value.toLowerCase();
+  channelsEl.innerHTML="";
+
+  channels
+    .filter(c=>c.group===currentGroup &&
+      c.name.toLowerCase().includes(q))
+    .forEach(c=>{
+      const div=document.createElement("div");
+      div.className="channel";
+
+      div.innerHTML = `
+        ${c.logo ? `<img src="${c.logo}">` : ""}
+        <div>${c.name}</div>
+      `;
+
+      div.onclick=()=>play(c);
+
+      channelsEl.appendChild(div);
+    });
+}
+
+searchInput.oninput=renderChannels;
+
+/* ===== PLAYER ===== */
+
+function play(ch){
+  if(hls) hls.destroy();
+  nowEl.textContent = ch.name;
+
+  if(Hls.isSupported() && ch.url.includes(".m3u8")){
+    hls = new Hls({
+      maxBufferLength: 20,
+      maxMaxBufferLength: 30,
+      enableWorker: true
+    });
+    hls.loadSource(ch.url);
+    hls.attachMedia(video);
+  }else{
+    video.src = ch.url;
+  }
+}
+
+loadPlaylist();
 </script>
 
 </body>
